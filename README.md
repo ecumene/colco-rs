@@ -1,3 +1,5 @@
+# Colco (colcothar) - 3D molecule viewer via glow-rs
+
 # How to Build
 
 ## Native
@@ -16,7 +18,7 @@ cargo run --features=window-sdl2
 
 ## Web
 
-`cd` to `examples/hello` directory
+`cd` to `colco` directory
 
 To run with web-sys:
 

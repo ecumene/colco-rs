@@ -1,57 +1,175 @@
+#![deny(clippy::all)]
 use glow::*;
 
-#[cfg(all(target_arch = "wasm32", feature = "web-sys"))]
-use wasm_bindgen::prelude::*;
+pub mod constants;
 
-#[cfg(all(target_arch = "wasm32", feature = "stdweb"))]
+use glam::{Mat4, Vec3};
+
+use std::{cell::RefCell, rc::Rc};
+
+use regex::Regex;
+use std::str::FromStr;
+
+use std_web::console;
 use std_web::{
     traits::*,
     unstable::TryInto,
-    web::{document, html_element::*},
+    web::{
+        document,
+        event::{IMouseEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent},
+        html_element::*,
+    },
 };
-#[cfg(all(target_arch = "wasm32", feature = "stdweb"))]
+
 use webgl_stdweb::WebGL2RenderingContext;
 
-#[cfg_attr(all(target_arch = "wasm32", feature = "web-sys"), wasm_bindgen(start))]
 pub fn wasm_main() {
     main();
 }
 
+#[derive(Clone)]
+enum Elements {
+    C,
+    H,
+}
+
+#[derive(Clone)]
+struct Atom {
+    position: Vec3,
+    element: Elements,
+}
+
+#[derive(Clone)]
+struct Mol<'a> {
+    atoms: Vec<Atom>,
+    bonds: Vec<(&'a Atom, &'a Atom)>,
+}
+
+impl FromStr for Mol<'_> {
+    type Err = regex::Error;
+
+    fn from_str(mol: &str) -> Result<Self, Self::Err> {
+        let regex = Regex::new(r#"(\-?[0-9][\.][0-9]+[0-9][ \t]+)(\-?[0-9][\.][0-9]+[0-9][ \t]+)(\-?[0-9][\.][0-9]+[0-9][ \t]+)(\w)"#)?;
+        let atoms = regex
+            .captures_iter(mol)
+            .filter_map(|cap| {
+                let groups = (cap.get(1), cap.get(2), cap.get(3), cap.get(4));
+                match groups {
+                    (Some(x), Some(y), Some(z), Some(a)) => Some(Atom {
+                        position: Vec3::new(
+                            x.as_str().trim().parse().unwrap(),
+                            y.as_str().trim().parse().unwrap(),
+                            z.as_str().trim().parse().unwrap(),
+                        ),
+                        element: Elements::C,
+                    }),
+                    x => None,
+                }
+            })
+            .map(|m| m)
+            .collect::<Vec<_>>();
+        Ok(Mol {
+            atoms,
+            bonds: vec![],
+        })
+    }
+}
+
+struct MovementInner<'a> {
+    is_mouse_down: bool,
+    transform: Mat4,
+    mol: Mol<'a>,
+}
+
+impl<'a> Default for MovementInner<'a> {
+    fn default() -> Self {
+        MovementInner {
+            is_mouse_down: true,
+            transform: Mat4::identity(),
+            mol: Mol::from_str(
+                "RDKit          3D
+
+ 12 12  0  0  0  0  0  0  0  0999 V2000
+    0.4280    0.9580   -0.0542 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.9494   -0.4476    0.0775 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.4453   -0.9477   -0.1840 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.9600    0.4286    0.2195 C   0  0  0  0  0  0  0  0  0  0  0  0
+    0.8336    1.6583    0.6806 H   0  0  0  0  0  0  0  0  0  0  0  0
+    0.5192    1.3314   -1.1071 H   0  0  0  0  0  0  0  0  0  0  0  0
+    1.6987   -0.6701   -0.7153 H   0  0  0  0  0  0  0  0  0  0  0  0
+    1.3564   -0.7346    1.0500 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.7635   -1.7281    0.5135 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.5819   -1.1411   -1.2610 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.7380    0.7914   -0.4921 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.2964    0.5016    1.2727 H   0  0  0  0  0  0  0  0  0  0  0  0
+  1  2  1  0
+  2  3  1  0
+  3  4  1  0
+  4  1  1  0
+  1  5  1  0
+  1  6  1  0
+  2  7  1  0
+  2  8  1  0
+  3  9  1  0
+  3 10  1  0
+  4 11  1  0
+  4 12  1  0
+M  END
+",
+            )
+            .unwrap(),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct Movement<'a> {
+    inner: Rc<RefCell<MovementInner<'a>>>,
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "stdweb"))]
+impl Movement<'_> {
+    pub fn get_molecule(&self) -> Mol {
+        self.inner.borrow().mol.clone()
+    }
+
+    pub fn get_transform(&self) -> Mat4 {
+        self.inner.borrow().transform
+    }
+
+    pub fn on_mouse_move<MouseMoveEvent: IMouseEvent>(&self, location: MouseMoveEvent) {
+        let mut inner = self.inner.borrow_mut();
+        if (inner.is_mouse_down) {
+            inner.transform =
+                inner.transform * Mat4::from_rotation_x(location.movement_y() as f32 * 10.0);
+        }
+    }
+
+    pub fn on_mouse_down<MouseDownEvent: IMouseEvent>(&self, location: MouseDownEvent) {
+        let mut inner = self.inner.borrow_mut();
+        inner.is_mouse_down = true;
+        console!(log, inner.is_mouse_down);
+    }
+
+    pub fn on_mouse_up<MouseUpEvent: IMouseEvent>(&self, location: MouseUpEvent) {
+        let mut inner = self.inner.borrow_mut();
+        inner.is_mouse_down = false;
+        console!(log, inner.is_mouse_down);
+    }
+}
+
+impl Default for Movement<'_> {
+    fn default() -> Self {
+        Movement {
+            inner: Rc::new(RefCell::new(MovementInner::default())),
+        }
+    }
+}
+
 fn main() {
-    let VERTICES: Vec<f32> = vec![
-        -0.5, -0.5, 0.0,
-        0.5, -0.5, 0.0,
-        0.0, 0.5, 0.0
-    ];
+    let movement: Movement = Movement::default();
 
     unsafe {
-        // Create a context from a WebGL2 context on wasm32 targets
-        #[cfg(all(target_arch = "wasm32", feature = "web-sys"))]
-        let (_window, gl, _events_loop, render_loop, shader_version) = {
-            use wasm_bindgen::JsCast;
-            let canvas = web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .get_element_by_id("canvas")
-                .unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>()
-                .unwrap();
-            let webgl2_context = canvas
-                .get_context("webgl2")
-                .unwrap()
-                .unwrap()
-                .dyn_into::<web_sys::WebGl2RenderingContext>()
-                .unwrap();
-            (
-                (),
-                glow::Context::from_webgl2_context(webgl2_context),
-                (),
-                glow::RenderLoop::from_request_animation_frame(),
-                "#version 300 es",
-            )
-        };
-
         #[cfg(all(target_arch = "wasm32", feature = "stdweb"))]
         let (_window, gl, _events_loop, render_loop, shader_version) = {
             let canvas: CanvasElement = document()
@@ -59,15 +177,22 @@ fn main() {
                 .unwrap()
                 .try_into()
                 .unwrap();
-            document()
-                .body()
-                .unwrap()
-                .append_child(&canvas);
-            canvas.set_width(640);
-            canvas.set_height(480);
-            let webgl2_context: WebGL2RenderingContext = canvas
-                .get_context()
-                .unwrap();
+            let movement_for_mouse_move_event_closure = movement.clone();
+            canvas.add_event_listener(move |event: MouseMoveEvent| {
+                movement_for_mouse_move_event_closure.on_mouse_move(event);
+            });
+            let movement_for_mouse_down_event_closure = movement.clone();
+            canvas.add_event_listener(move |event: MouseDownEvent| {
+                movement_for_mouse_down_event_closure.on_mouse_down(event);
+            });
+            let movement_for_mouse_up_event_closure = movement.clone();
+            canvas.add_event_listener(move |event: MouseUpEvent| {
+                movement_for_mouse_up_event_closure.on_mouse_up(event);
+            });
+            document().body().unwrap().append_child(&canvas);
+            canvas.set_width(1024);
+            canvas.set_height(768);
+            let webgl2_context: WebGL2RenderingContext = canvas.get_context().unwrap();
             (
                 (),
                 glow::Context::from_webgl2_context(webgl2_context),
@@ -77,73 +202,78 @@ fn main() {
             )
         };
 
-        // Create a context from a glutin window on non-wasm32 targets
-        #[cfg(feature = "window-glutin")]
-        let (gl, event_loop, windowed_context, shader_version) = {
-            let el = glutin::event_loop::EventLoop::new();
-            let wb = glutin::window::WindowBuilder::new()
-                .with_title("Hello triangle!")
-                .with_inner_size(glutin::dpi::LogicalSize::new(1024.0, 768.0));
-            let windowed_context = glutin::ContextBuilder::new()
-                .with_vsync(true)
-                .build_windowed(wb, &el)
-                .unwrap();
-            let windowed_context = windowed_context.make_current().unwrap();
-            let context = glow::Context::from_loader_function(|s| {
-                windowed_context.get_proc_address(s) as *const _
-            });
-            (context, el, windowed_context, "#version 410")
-        };
-
-        // Create a context from a sdl2 window
-        #[cfg(feature = "window-sdl2")]
-        let (gl, mut events_loop, render_loop, shader_version, _gl_context) = {
-            let sdl = sdl2::init().unwrap();
-            let video = sdl.video().unwrap();
-            let gl_attr = video.gl_attr();
-            gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-            gl_attr.set_context_version(3, 0);
-
-            let window = video
-                .window("Hello triangle!", 1024, 769)
-                .opengl()
-                .resizable()
-                .build()
-                .unwrap();
-            let gl_context = window.gl_create_context().unwrap();
-            let context =
-                glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
-            let render_loop = glow::RenderLoop::<sdl2::video::Window>::from_sdl_window(window);
-            let event_loop = sdl.event_pump().unwrap();
-            (context, event_loop, render_loop, "#version 410", gl_context)
-        };
-
         let vbo = gl.create_buffer().unwrap();
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-        gl.buffer_data_size(glow::ARRAY_BUFFER, VERTICES.len() as i32, glow::STATIC_DRAW);
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&VERTICES), glow::STATIC_DRAW);
+        gl.buffer_data_size(
+            glow::ARRAY_BUFFER,
+            constants::SPHERE_MESH.len() as i32 * std::mem::size_of::<f32>() as i32,
+            glow::STATIC_DRAW,
+        );
+        gl.buffer_data_u8_slice(
+            glow::ARRAY_BUFFER,
+            bytemuck::cast_slice(&constants::SPHERE_MESH),
+            glow::STATIC_DRAW,
+        );
         gl.bind_buffer(glow::ARRAY_BUFFER, None);
+
+        let ibo = gl.create_buffer().unwrap();
+        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ibo));
+        gl.buffer_data_size(
+            glow::ELEMENT_ARRAY_BUFFER,
+            constants::SPHERE_INDICES.len() as i32 * std::mem::size_of::<u16>() as i32,
+            glow::STATIC_DRAW,
+        );
+        gl.buffer_data_u8_slice(
+            glow::ELEMENT_ARRAY_BUFFER,
+            bytemuck::cast_slice(&constants::SPHERE_INDICES),
+            glow::STATIC_DRAW,
+        );
 
         let vertex_array = gl
             .create_vertex_array()
             .expect("Cannot create vertex array");
         gl.bind_vertex_array(Some(vertex_array));
+        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ibo));
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
         gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, 3 * std::mem::size_of::<f32>() as i32, 0);
+        gl.vertex_attrib_pointer_f32(
+            0,
+            3,
+            glow::FLOAT,
+            false,
+            6 * std::mem::size_of::<f32>() as i32,
+            0,
+        );
+        gl.enable_vertex_attrib_array(1);
+        gl.vertex_attrib_pointer_f32(
+            1,
+            3,
+            glow::FLOAT,
+            false,
+            6 * std::mem::size_of::<f32>() as i32,
+            3 * std::mem::size_of::<f32>() as i32,
+        );
 
         let program = gl.create_program().expect("Cannot create program");
 
         let (vertex_shader_source, fragment_shader_source) = (
             r#"
-            in vec3 vert_in;
+            layout(location = 0) in vec3 vert_in;
+            layout(location = 1) in vec3 norm_in;
+            out vec3 norm_out;
+            out vec3 eye;
+            uniform mat4 transform;
             void main() {
-                gl_Position = vec4(vert_in, 1.0);
+                eye = -normalize (vert_in);
+                norm_out = normalize(norm_in);
+                gl_Position = transform * vec4(vert_in, 1.0);
             }"#,
             r#"precision mediump float;
+            in vec3 norm_out;
+            in vec3 eye;
             out vec4 color;
             void main() {
-                color = vec4(1.0);
+                color = vec4(vec3(dot(eye, normalize(reflect(vec3(0.0, 0.0, 1.0), norm_out)))), 1.0);
             }"#,
         );
 
@@ -178,66 +308,28 @@ fn main() {
         }
 
         gl.use_program(Some(program));
-        gl.clear_color(0.1, 0.2, 0.3, 1.0);
+        gl.clear_color(0.0, 0.0, 0.0, 0.0);
 
-        // We handle events very differently between targets
+        let movement_for_render_closure = movement.clone();
 
-        #[cfg(feature = "window-glutin")]
-        {
-            use glutin::event::{Event, WindowEvent};
-            use glutin::event_loop::ControlFlow;
-
-            event_loop.run(move |event, _, control_flow| {
-                *control_flow = ControlFlow::Wait;
-                match event {
-                    Event::LoopDestroyed => {
-                        println!("Event::LoopDestroyed!");
-                        return;
-                    }
-                    Event::EventsCleared => {
-                        println!("EventsCleared");
-                        windowed_context.window().request_redraw();
-                    }
-                    Event::WindowEvent { ref event, .. } => match event {
-                        WindowEvent::Resized(logical_size) => {
-                            println!("WindowEvent::Resized: {:?}", logical_size);
-                            let dpi_factor = windowed_context.window().hidpi_factor();
-                            windowed_context.resize(logical_size.to_physical(dpi_factor));
-                        }
-                        WindowEvent::RedrawRequested => {
-                            println!("WindowEvent::RedrawRequested");
-                            gl.clear(glow::COLOR_BUFFER_BIT);
-                            gl.draw_arrays(glow::TRIANGLES, 0, 3);
-                            windowed_context.swap_buffers().unwrap();
-                        }
-                        WindowEvent::CloseRequested => {
-                            println!("WindowEvent::CloseRequested");
-                            gl.delete_program(program);
-                            gl.delete_vertex_array(vertex_array);
-                            *control_flow = ControlFlow::Exit
-                        }
-                        _ => (),
-                    },
-                    _ => (),
-                }
-            });
-        }
-
-        #[cfg(not(feature = "window-glutin"))]
         render_loop.run(move |running: &mut bool| {
-            #[cfg(feature = "window-sdl2")]
-            {
-                for event in events_loop.poll_iter() {
-                    match event {
-                        sdl2::event::Event::Quit { .. } => *running = false,
-                        _ => {}
-                    }
-                }
-            }
-
             gl.clear(glow::COLOR_BUFFER_BIT);
-            gl.draw_arrays(glow::TRIANGLES, 0, 3);
-
+            for atom in movement_for_render_closure.get_molecule().atoms {
+                let transform_location = gl.get_uniform_location(program, "transform");
+                gl.uniform_matrix_4_f32_slice(
+                    transform_location,
+                    false,
+                    (
+                        Mat4::from_translation(atom.position * 0.25)
+                        * Mat4::from_scale(Vec3::new(0.1, 0.1, 0.1))
+                        // * Mat4::orthographic_rh_gl(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0)
+                        // * Mat4::from_rotation_x(0)
+                        )
+                    .as_ref(),
+                );
+                gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ibo));
+                gl.draw_elements(glow::TRIANGLES, constants::SPHERE_INDICES.len() as i32, glow::UNSIGNED_SHORT, 0);
+            }
             if !*running {
                 gl.delete_program(program);
                 gl.delete_vertex_array(vertex_array);
