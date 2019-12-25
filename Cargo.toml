@@ -1,10 +1,22 @@
 [package]
-name = "colco"
+name = "hello"
 version = "0.1.0"
 edition = "2018"
+build = "build.rs"
+
+[profile.release]
+opt-level = 'z'
+lto = true
+
+[build-dependencies]
+itertools = "*"
+build_const = "*"
+tobj = "*"
 
 [dependencies]
-glow = { path = "../glow", default-features=false }
+glow = { version="*", default-features=false }
+regex = "1.3.1"
+glam = "0.8.3"
 bytemuck = "1"
 
 [target.'cfg(not(any(target_arch = "wasm32")))'.dependencies]
@@ -12,7 +24,7 @@ glutin = { version = "0.22.0-alpha3", optional = true }
 sdl2 = { version = "0.32", optional = true }
 
 [features]
-default = ["web-sys"]
+default = ["stdweb"]
 web-sys = ["web_sys", "wasm-bindgen", "glow/web-sys"]
 stdweb = ["std_web", "webgl_stdweb", "glow/stdweb"]
 window-sdl2 = ["sdl2", "glow/sdl2"]

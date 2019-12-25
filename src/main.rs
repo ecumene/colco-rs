@@ -1,16 +1,9 @@
 #![deny(clippy::all)]
 use glow::*;
-
-pub mod constants;
-
-use glam::{Mat4, Vec3};
-
+use glam::{Mat4, Quat, Vec3};
 use std::{cell::RefCell, rc::Rc};
-
-use regex::Regex;
+use webgl_stdweb::WebGL2RenderingContext;
 use std::str::FromStr;
-
-use std_web::console;
 use std_web::{
     traits::*,
     unstable::TryInto,
@@ -21,101 +14,61 @@ use std_web::{
     },
 };
 
-use webgl_stdweb::WebGL2RenderingContext;
+pub mod constants;
+pub mod assets;
+pub mod mol;
+
+use constants::{SPHERE_SIZE, INDICES};
+use mol::Mol;
+use assets::init_buffers_from_constants;
 
 pub fn wasm_main() {
     main();
 }
 
-#[derive(Clone)]
-enum Elements {
-    C,
-    H,
-}
-
-#[derive(Clone)]
-struct Atom {
-    position: Vec3,
-    element: Elements,
-}
-
-#[derive(Clone)]
-struct Mol<'a> {
-    atoms: Vec<Atom>,
-    bonds: Vec<(&'a Atom, &'a Atom)>,
-}
-
-impl FromStr for Mol<'_> {
-    type Err = regex::Error;
-
-    fn from_str(mol: &str) -> Result<Self, Self::Err> {
-        let regex = Regex::new(r#"(\-?[0-9][\.][0-9]+[0-9][ \t]+)(\-?[0-9][\.][0-9]+[0-9][ \t]+)(\-?[0-9][\.][0-9]+[0-9][ \t]+)(\w)"#)?;
-        let atoms = regex
-            .captures_iter(mol)
-            .filter_map(|cap| {
-                let groups = (cap.get(1), cap.get(2), cap.get(3), cap.get(4));
-                match groups {
-                    (Some(x), Some(y), Some(z), Some(a)) => Some(Atom {
-                        position: Vec3::new(
-                            x.as_str().trim().parse().unwrap(),
-                            y.as_str().trim().parse().unwrap(),
-                            z.as_str().trim().parse().unwrap(),
-                        ),
-                        element: Elements::C,
-                    }),
-                    x => None,
-                }
-            })
-            .map(|m| m)
-            .collect::<Vec<_>>();
-        Ok(Mol {
-            atoms,
-            bonds: vec![],
-        })
-    }
-}
-
-struct MovementInner<'a> {
+struct ColcoInner {
     is_mouse_down: bool,
-    transform: Mat4,
-    mol: Mol<'a>,
+    rotation: Quat,
+    mol: Mol,
 }
 
-impl<'a> Default for MovementInner<'a> {
+impl Default for ColcoInner {
     fn default() -> Self {
-        MovementInner {
-            is_mouse_down: true,
-            transform: Mat4::identity(),
+        ColcoInner {
+            is_mouse_down: false,
+            rotation: Quat::new(0.0, 1.0, 0.0, 0.0),
+            // TODO: Mol from JS
             mol: Mol::from_str(
-                "RDKit          3D
+                "
+                RDKit          3D
 
- 12 12  0  0  0  0  0  0  0  0999 V2000
-    0.4280    0.9580   -0.0542 C   0  0  0  0  0  0  0  0  0  0  0  0
-    0.9494   -0.4476    0.0775 C   0  0  0  0  0  0  0  0  0  0  0  0
-   -0.4453   -0.9477   -0.1840 C   0  0  0  0  0  0  0  0  0  0  0  0
-   -0.9600    0.4286    0.2195 C   0  0  0  0  0  0  0  0  0  0  0  0
-    0.8336    1.6583    0.6806 H   0  0  0  0  0  0  0  0  0  0  0  0
-    0.5192    1.3314   -1.1071 H   0  0  0  0  0  0  0  0  0  0  0  0
-    1.6987   -0.6701   -0.7153 H   0  0  0  0  0  0  0  0  0  0  0  0
-    1.3564   -0.7346    1.0500 H   0  0  0  0  0  0  0  0  0  0  0  0
-   -0.7635   -1.7281    0.5135 H   0  0  0  0  0  0  0  0  0  0  0  0
-   -0.5819   -1.1411   -1.2610 H   0  0  0  0  0  0  0  0  0  0  0  0
-   -1.7380    0.7914   -0.4921 H   0  0  0  0  0  0  0  0  0  0  0  0
-   -1.2964    0.5016    1.2727 H   0  0  0  0  0  0  0  0  0  0  0  0
-  1  2  1  0
-  2  3  1  0
-  3  4  1  0
-  4  1  1  0
-  1  5  1  0
-  1  6  1  0
-  2  7  1  0
-  2  8  1  0
-  3  9  1  0
-  3 10  1  0
-  4 11  1  0
-  4 12  1  0
-M  END
-",
+                12 12  0  0  0  0  0  0  0  0999 V2000
+                   0.4280    0.9580   -0.0542 C   0  0  0  0  0  0  0  0  0  0  0  0
+                   0.9494   -0.4476    0.0775 C   0  0  0  0  0  0  0  0  0  0  0  0
+                  -0.4453   -0.9477   -0.1840 C   0  0  0  0  0  0  0  0  0  0  0  0
+                  -0.9600    0.4286    0.2195 C   0  0  0  0  0  0  0  0  0  0  0  0
+                   0.8336    1.6583    0.6806 H   0  0  0  0  0  0  0  0  0  0  0  0
+                   0.5192    1.3314   -1.1071 H   0  0  0  0  0  0  0  0  0  0  0  0
+                   1.6987   -0.6701   -0.7153 H   0  0  0  0  0  0  0  0  0  0  0  0
+                   1.3564   -0.7346    1.0500 H   0  0  0  0  0  0  0  0  0  0  0  0
+                  -0.7635   -1.7281    0.5135 H   0  0  0  0  0  0  0  0  0  0  0  0
+                  -0.5819   -1.1411   -1.2610 H   0  0  0  0  0  0  0  0  0  0  0  0
+                  -1.7380    0.7914   -0.4921 H   0  0  0  0  0  0  0  0  0  0  0  0
+                  -1.2964    0.5016    1.2727 H   0  0  0  0  0  0  0  0  0  0  0  0
+                 1  2  1  0
+                 2  3  1  0
+                 3  4  1  0
+                 4  1  1  0
+                 1  5  1  0
+                 1  6  1  0
+                 2  7  1  0
+                 2  8  1  0
+                 3  9  1  0
+                 3 10  1  0
+                 4 11  1  0
+                 4 12  1  0
+               M  END
+                ",
             )
             .unwrap(),
         }
@@ -123,60 +76,125 @@ M  END
 }
 
 #[derive(Clone)]
-struct Movement<'a> {
-    inner: Rc<RefCell<MovementInner<'a>>>,
+struct Colco {
+    inner: Rc<RefCell<ColcoInner>>,
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "stdweb"))]
-impl Movement<'_> {
-    pub fn get_molecule(&self) -> Mol {
-        self.inner.borrow().mol.clone()
+impl Colco {
+    pub fn view_vector(&self) -> Vec3 {
+        // TODO: Make vec constant
+        let inner = self.inner.borrow();
+        inner.rotation * Vec3::new(0.0, 0.0, 1.0)
     }
 
-    pub fn get_transform(&self) -> Mat4 {
-        self.inner.borrow().transform
-    }
-
-    pub fn on_mouse_move<MouseMoveEvent: IMouseEvent>(&self, location: MouseMoveEvent) {
-        let mut inner = self.inner.borrow_mut();
-        if (inner.is_mouse_down) {
-            inner.transform =
-                inner.transform * Mat4::from_rotation_x(location.movement_y() as f32 * 10.0);
+    pub fn render_mol<B: glow::HasContext>(
+        &self,
+        program: <B as glow::HasContext>::Program,
+        gl: &B,
+    ) {
+        unsafe {
+            let inner = self.inner.borrow();
+            for atom in &inner.mol.atoms {
+                let transform_location = gl.get_uniform_location(program, "transform");
+                let color_location = gl.get_uniform_location(program, "u_color");
+                &gl.uniform_3_f32(
+                    color_location,
+                    atom.element.color.x(),
+                    atom.element.color.y(),
+                    atom.element.color.z(),
+                );
+                let view_location = gl.get_uniform_location(program, "u_view");
+                let view_vector = self.view_vector();
+                &gl.uniform_3_f32(
+                    view_location,
+                    view_vector.x(),
+                    view_vector.y(),
+                    view_vector.z(),
+                );
+                &gl.uniform_matrix_4_f32_slice(
+                    transform_location,
+                    false,
+                    (inner.mol.bounding_projection
+                        * Mat4::from_quat(inner.rotation).transpose()
+                        * Mat4::from_translation(atom.position * 4.5)
+                        * Mat4::from_scale(
+                            Vec3::new(atom.element.scale, atom.element.scale, atom.element.scale)
+                                * 2.0,
+                        ))
+                    .as_ref(),
+                );
+                &gl.draw_elements(
+                    glow::TRIANGLES,
+                    SPHERE_SIZE as i32,
+                    glow::UNSIGNED_INT,
+                    0,
+                );
+            }
+            for bond in &inner.mol.bonds {
+                // TODO: Other bond types
+                let transform_location = gl.get_uniform_location(program, "transform");
+                let color_location = gl.get_uniform_location(program, "u_color");
+                &gl.uniform_3_f32(color_location, 0.25, 0.25, 0.25);
+                &gl.uniform_matrix_4_f32_slice(
+                    transform_location,
+                    false,
+                    (inner.mol.bounding_projection
+                        * Mat4::from_quat(inner.rotation).transpose()
+                        * Mat4::from_translation(bond.position * 4.5)
+                        * Mat4::from_quat(bond.rotation)
+                        * Mat4::from_scale(Vec3::new(0.5, bond.length * 2.25, 0.5)))
+                    .as_ref(),
+                );
+                &gl.draw_elements(
+                    glow::TRIANGLES,
+                    (INDICES.len() - SPHERE_SIZE) as i32,
+                    glow::UNSIGNED_INT,
+                    (SPHERE_SIZE * std::mem::size_of::<u32>()) as i32,
+                );
+            }
         }
     }
 
-    pub fn on_mouse_down<MouseDownEvent: IMouseEvent>(&self, location: MouseDownEvent) {
+    // TODO: Decouple, for desktop version
+    pub fn on_mouse_move<MouseMoveEvent: IMouseEvent>(&self, location: MouseMoveEvent) {
         let mut inner = self.inner.borrow_mut();
-        inner.is_mouse_down = true;
-        console!(log, inner.is_mouse_down);
+        if inner.is_mouse_down {
+            inner.rotation = inner.rotation
+                * Quat::from_rotation_x(-location.movement_y() as f32 * 0.005)
+                * Quat::from_rotation_y(-location.movement_x() as f32 * 0.005);
+        }
     }
 
-    pub fn on_mouse_up<MouseUpEvent: IMouseEvent>(&self, location: MouseUpEvent) {
+    pub fn on_mouse_down<MouseDownEvent: IMouseEvent>(&self, _location: MouseDownEvent) {
+        let mut inner = self.inner.borrow_mut();
+        inner.is_mouse_down = true;
+    }
+
+    pub fn on_mouse_up<MouseUpEvent: IMouseEvent>(&self, _location: MouseUpEvent) {
         let mut inner = self.inner.borrow_mut();
         inner.is_mouse_down = false;
-        console!(log, inner.is_mouse_down);
     }
 }
 
-impl Default for Movement<'_> {
+impl Default for Colco {
     fn default() -> Self {
-        Movement {
-            inner: Rc::new(RefCell::new(MovementInner::default())),
+        Colco {
+            inner: Rc::new(RefCell::new(ColcoInner::default())),
         }
     }
 }
 
 fn main() {
-    let movement: Movement = Movement::default();
+    let movement: Colco = Colco::default();
 
     unsafe {
-        #[cfg(all(target_arch = "wasm32", feature = "stdweb"))]
         let (_window, gl, _events_loop, render_loop, shader_version) = {
             let canvas: CanvasElement = document()
                 .create_element("canvas")
                 .unwrap()
                 .try_into()
                 .unwrap();
+            // TODO: Decouple for desktop version
             let movement_for_mouse_move_event_closure = movement.clone();
             canvas.add_event_listener(move |event: MouseMoveEvent| {
                 movement_for_mouse_move_event_closure.on_mouse_move(event);
@@ -190,8 +208,10 @@ fn main() {
                 movement_for_mouse_up_event_closure.on_mouse_up(event);
             });
             document().body().unwrap().append_child(&canvas);
-            canvas.set_width(1024);
+            // TODO: JS defined size
+            canvas.set_width(768);
             canvas.set_height(768);
+            // TODO: Desktop context
             let webgl2_context: WebGL2RenderingContext = canvas.get_context().unwrap();
             (
                 (),
@@ -202,62 +222,10 @@ fn main() {
             )
         };
 
-        let vbo = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-        gl.buffer_data_size(
-            glow::ARRAY_BUFFER,
-            constants::SPHERE_MESH.len() as i32 * std::mem::size_of::<f32>() as i32,
-            glow::STATIC_DRAW,
-        );
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            bytemuck::cast_slice(&constants::SPHERE_MESH),
-            glow::STATIC_DRAW,
-        );
-        gl.bind_buffer(glow::ARRAY_BUFFER, None);
-
-        let ibo = gl.create_buffer().unwrap();
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ibo));
-        gl.buffer_data_size(
-            glow::ELEMENT_ARRAY_BUFFER,
-            constants::SPHERE_INDICES.len() as i32 * std::mem::size_of::<u16>() as i32,
-            glow::STATIC_DRAW,
-        );
-        gl.buffer_data_u8_slice(
-            glow::ELEMENT_ARRAY_BUFFER,
-            bytemuck::cast_slice(&constants::SPHERE_INDICES),
-            glow::STATIC_DRAW,
-        );
-
-        let vertex_array = gl
-            .create_vertex_array()
-            .expect("Cannot create vertex array");
-        gl.bind_vertex_array(Some(vertex_array));
-        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ibo));
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-        gl.enable_vertex_attrib_array(0);
-        gl.vertex_attrib_pointer_f32(
-            0,
-            3,
-            glow::FLOAT,
-            false,
-            6 * std::mem::size_of::<f32>() as i32,
-            0,
-        );
-        gl.enable_vertex_attrib_array(1);
-        gl.vertex_attrib_pointer_f32(
-            1,
-            3,
-            glow::FLOAT,
-            false,
-            6 * std::mem::size_of::<f32>() as i32,
-            3 * std::mem::size_of::<f32>() as i32,
-        );
-
         let program = gl.create_program().expect("Cannot create program");
 
-        let (vertex_shader_source, fragment_shader_source) = (
-            r#"
+        let shader_sources = [
+            (glow::VERTEX_SHADER, r#"
             layout(location = 0) in vec3 vert_in;
             layout(location = 1) in vec3 norm_in;
             out vec3 norm_out;
@@ -267,23 +235,21 @@ fn main() {
                 eye = -normalize (vert_in);
                 norm_out = normalize(norm_in);
                 gl_Position = transform * vec4(vert_in, 1.0);
-            }"#,
-            r#"precision mediump float;
+            }"#),
+            (glow::FRAGMENT_SHADER, r#"precision mediump float;
+            uniform vec3 u_color;
+            uniform vec3 u_view;
             in vec3 norm_out;
             in vec3 eye;
             out vec4 color;
             void main() {
-                color = vec4(vec3(dot(eye, normalize(reflect(vec3(0.0, 0.0, 1.0), norm_out)))), 1.0);
-            }"#,
-        );
-
-        let shader_sources = [
-            (glow::VERTEX_SHADER, vertex_shader_source),
-            (glow::FRAGMENT_SHADER, fragment_shader_source),
+                color = vec4(u_color * vec3(dot(eye, normalize(reflect(u_view, norm_out)))), 1.0);
+            }"#),
         ];
 
         let mut shaders = Vec::with_capacity(shader_sources.len());
 
+        // TODO: Good error handling
         for (shader_type, shader_source) in shader_sources.iter() {
             let shader = gl
                 .create_shader(*shader_type)
@@ -307,29 +273,19 @@ fn main() {
             gl.delete_shader(shader);
         }
 
+        // TODO: Compile flags for color, cullface, enables...
         gl.use_program(Some(program));
         gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        gl.enable(glow::CULL_FACE);
+        gl.cull_face(glow::BACK);
+        gl.enable(glow::DEPTH_TEST);
 
         let movement_for_render_closure = movement.clone();
+        let vertex_array = init_buffers_from_constants(&gl);
 
         render_loop.run(move |running: &mut bool| {
             gl.clear(glow::COLOR_BUFFER_BIT);
-            for atom in movement_for_render_closure.get_molecule().atoms {
-                let transform_location = gl.get_uniform_location(program, "transform");
-                gl.uniform_matrix_4_f32_slice(
-                    transform_location,
-                    false,
-                    (
-                        Mat4::from_translation(atom.position * 0.25)
-                        * Mat4::from_scale(Vec3::new(0.1, 0.1, 0.1))
-                        // * Mat4::orthographic_rh_gl(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0)
-                        // * Mat4::from_rotation_x(0)
-                        )
-                    .as_ref(),
-                );
-                gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ibo));
-                gl.draw_elements(glow::TRIANGLES, constants::SPHERE_INDICES.len() as i32, glow::UNSIGNED_SHORT, 0);
-            }
+            movement_for_render_closure.render_mol(program, &gl);
             if !*running {
                 gl.delete_program(program);
                 gl.delete_vertex_array(vertex_array);
