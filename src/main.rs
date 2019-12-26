@@ -1,3 +1,5 @@
+// TODO: Reduce bundle size from 890kb to ~300kb
+
 #![deny(clippy::all)]
 use glow::*;
 use glam::{Mat4, Quat, Vec3};
@@ -7,6 +9,7 @@ use std::str::FromStr;
 use std_web::{
     traits::*,
     unstable::TryInto,
+    console,
     web::{
         document,
         event::{IMouseEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent},
@@ -56,9 +59,9 @@ impl Default for ColcoInner {
                   -1.7380    0.7914   -0.4921 H   0  0  0  0  0  0  0  0  0  0  0  0
                   -1.2964    0.5016    1.2727 H   0  0  0  0  0  0  0  0  0  0  0  0
                  1  2  1  0
-                 2  3  1  0
-                 3  4  1  0
-                 4  1  1  0
+                 2  3  2  0
+                 3  4  3  0
+                 4  1  4  0
                  1  5  1  0
                  1  6  1  0
                  2  7  1  0
@@ -131,26 +134,29 @@ impl Colco {
                 );
             }
             for bond in &inner.mol.bonds {
-                // TODO: Other bond types
+                // TODO: Move uniform locations into shader-lifetime-constrained constants
                 let transform_location = gl.get_uniform_location(program, "transform");
                 let color_location = gl.get_uniform_location(program, "u_color");
                 &gl.uniform_3_f32(color_location, 0.25, 0.25, 0.25);
-                &gl.uniform_matrix_4_f32_slice(
-                    transform_location,
-                    false,
-                    (inner.mol.bounding_projection
-                        * Mat4::from_quat(inner.rotation).transpose()
-                        * Mat4::from_translation(bond.position * 4.5)
-                        * Mat4::from_quat(bond.rotation)
-                        * Mat4::from_scale(Vec3::new(0.5, bond.length * 2.25, 0.5)))
-                    .as_ref(),
-                );
-                &gl.draw_elements(
-                    glow::TRIANGLES,
-                    (INDICES.len() - SPHERE_SIZE) as i32,
-                    glow::UNSIGNED_INT,
-                    (SPHERE_SIZE * std::mem::size_of::<u32>()) as i32,
-                );
+                for bond_num in 0..bond.bond_type {
+                    &gl.uniform_matrix_4_f32_slice(
+                        transform_location.clone(),
+                        false,
+                        (inner.mol.bounding_projection
+                            * Mat4::from_quat(inner.rotation).transpose()
+                            * Mat4::from_translation(bond.position  * 4.5)
+                            * Mat4::from_quat(bond.rotation)
+                            * Mat4::from_translation(Vec3::new(0.0, 0.0, 0.6 * bond_num as f32 - (0.25 * bond.bond_type as f32)))
+                            * Mat4::from_scale(Vec3::new(0.5 / bond.bond_type as f32, bond.length * 2.25, 0.5 / bond.bond_type as f32)))
+                        .as_ref(),
+                    );
+                    &gl.draw_elements(
+                        glow::TRIANGLES,
+                        (INDICES.len() - SPHERE_SIZE) as i32,
+                        glow::UNSIGNED_INT,
+                        (SPHERE_SIZE * std::mem::size_of::<u32>()) as i32,
+                    );
+                }
             }
         }
     }
