@@ -85,9 +85,8 @@ struct Colco {
 
 impl Colco {
     pub fn view_vector(&self) -> Vec3 {
-        // TODO: Make vec constant
         let inner = self.inner.borrow();
-        inner.rotation * Vec3::new(0.0, 0.0, 1.0)
+        inner.rotation * Vec3::unit_y()
     }
 
     pub fn render_mol<B: glow::HasContext>(
