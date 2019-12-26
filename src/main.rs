@@ -36,7 +36,7 @@ impl Default for ColcoInner {
     fn default() -> Self {
         ColcoInner {
             is_mouse_down: false,
-            rotation: Quat::new(0.0, 1.0, 0.0, 0.0),
+            rotation: Quat::from_xyzw(0.0, 1.0, 0.0, 0.0),
             // TODO: Mol from JS
             mol: Mol::from_str(
                 "
