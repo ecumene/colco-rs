@@ -2,6 +2,7 @@
 
 #![deny(clippy::all)]
 use glow::*;
+use glow::HasContext as Context;
 use glam::{Mat4, Quat, Vec3};
 use std::{cell::RefCell, rc::Rc};
 use webgl_stdweb::WebGL2RenderingContext;
@@ -9,7 +10,6 @@ use std::str::FromStr;
 use std_web::{
     traits::*,
     unstable::TryInto,
-    console,
     web::{
         document,
         event::{IMouseEvent, MouseDownEvent, MouseMoveEvent, MouseUpEvent},
@@ -86,26 +86,27 @@ struct Colco {
 impl Colco {
     pub fn view_vector(&self) -> Vec3 {
         let inner = self.inner.borrow();
-        inner.rotation * Vec3::unit_y()
+        inner.rotation * Vec3::unit_z()
     }
 
-    pub fn render_mol<B: glow::HasContext>(
+    pub unsafe fn render_mol<B: Context>(
         &self,
-        program: <B as glow::HasContext>::Program,
+        transform_uniform: &Option<<B as Context>::UniformLocation>,
+        color_uniform: &Option<<B as Context>::UniformLocation>,
+        view_uniform: &Option<<B as Context>::UniformLocation>,
         gl: &B,
     ) {
-        unsafe {
             let inner = self.inner.borrow();
             for atom in &inner.mol.atoms {
-                let transform_location = gl.get_uniform_location(program, "transform");
-                let color_location = gl.get_uniform_location(program, "u_color");
+                let transform_location = Some(transform_uniform.as_ref().unwrap().clone());
+                let color_location = Some(color_uniform.as_ref().unwrap().clone());
+                let view_location = Some(view_uniform.as_ref().unwrap().clone());
                 &gl.uniform_3_f32(
                     color_location,
                     atom.element.color.x(),
                     atom.element.color.y(),
                     atom.element.color.z(),
                 );
-                let view_location = gl.get_uniform_location(program, "u_view");
                 let view_vector = self.view_vector();
                 &gl.uniform_3_f32(
                     view_location,
@@ -133,9 +134,8 @@ impl Colco {
                 );
             }
             for bond in &inner.mol.bonds {
-                // TODO: Move uniform locations into shader-lifetime-constrained constants
-                let transform_location = gl.get_uniform_location(program, "transform");
-                let color_location = gl.get_uniform_location(program, "u_color");
+                let transform_location = Some(transform_uniform.as_ref().unwrap().clone());
+                let color_location = Some(color_uniform.as_ref().unwrap().clone());
                 &gl.uniform_3_f32(color_location, 0.25, 0.25, 0.25);
                 for bond_num in 0..bond.bond_type {
                     &gl.uniform_matrix_4_f32_slice(
@@ -145,7 +145,7 @@ impl Colco {
                             * Mat4::from_quat(inner.rotation).transpose()
                             * Mat4::from_translation(bond.position  * 4.5)
                             * Mat4::from_quat(bond.rotation)
-                            * Mat4::from_translation(Vec3::new(0.0, 0.0, 0.6 * bond_num as f32 - (0.25 * bond.bond_type as f32)))
+                            * Mat4::from_translation(Vec3::new(0.0, 0.0, 0.75 * bond_num as f32 - (0.25 * bond.bond_type as f32)))
                             * Mat4::from_scale(Vec3::new(0.5 / bond.bond_type as f32, bond.length * 2.25, 0.5 / bond.bond_type as f32)))
                         .as_ref(),
                     );
@@ -157,7 +157,6 @@ impl Colco {
                     );
                 }
             }
-        }
     }
 
     // TODO: Decouple, for desktop version
@@ -195,7 +194,7 @@ fn main() {
     unsafe {
         let (_window, gl, _events_loop, render_loop, shader_version) = {
             let canvas: CanvasElement = document()
-                .create_element("canvas")
+                .get_element_by_id("colco-viewer")
                 .unwrap()
                 .try_into()
                 .unwrap();
@@ -213,9 +212,6 @@ fn main() {
                 movement_for_mouse_up_event_closure.on_mouse_up(event);
             });
             document().body().unwrap().append_child(&canvas);
-            // TODO: JS defined size
-            canvas.set_width(768);
-            canvas.set_height(768);
             // TODO: Desktop context
             let webgl2_context: WebGL2RenderingContext = canvas.get_context().unwrap();
             (
@@ -287,10 +283,13 @@ fn main() {
 
         let movement_for_render_closure = movement.clone();
         let vertex_array = init_buffers_from_constants(&gl);
+        let transform_location = gl.get_uniform_location(program, "transform");
+        let color_location = gl.get_uniform_location(program, "u_color");
+        let view_location = gl.get_uniform_location(program, "u_view");
 
         render_loop.run(move |running: &mut bool| {
             gl.clear(glow::COLOR_BUFFER_BIT);
-            movement_for_render_closure.render_mol(program, &gl);
+            movement_for_render_closure.render_mol(&transform_location, &color_location, &view_location, &gl);
             if !*running {
                 gl.delete_program(program);
                 gl.delete_vertex_array(vertex_array);

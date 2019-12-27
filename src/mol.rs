@@ -46,6 +46,7 @@ impl FromStr for Mol {
                         if max_element > bounding_size {
                             bounding_size = max_element;
                         }
+                        // TODO: More atom types
                         Some(Atom {
                             position,
                             element: match a.as_str().trim() {
