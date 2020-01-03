@@ -7,8 +7,11 @@ use glam::{Mat4, Quat, Vec3};
 use std::{cell::RefCell, rc::Rc};
 use webgl_stdweb::WebGL2RenderingContext;
 use std::str::FromStr;
-use std_web::{
+use stdweb::{
     traits::*,
+    console,
+    js,
+    js_export,
     unstable::TryInto,
     web::{
         document,
@@ -25,54 +28,18 @@ use constants::{SPHERE_SIZE, INDICES};
 use mol::Mol;
 use assets::init_buffers_from_constants;
 
-pub fn wasm_main() {
-    main();
-}
-
 struct ColcoInner {
     is_mouse_down: bool,
     rotation: Quat,
     mol: Mol,
 }
 
-impl Default for ColcoInner {
-    fn default() -> Self {
+impl ColcoInner {
+    fn new(molecule_data: &str) -> Self {
         ColcoInner {
             is_mouse_down: false,
             rotation: Quat::from_xyzw(0.0, 1.0, 0.0, 0.0),
-            // TODO: Mol from JS
-            mol: Mol::from_str(
-                "
-                RDKit          3D
-
-                12 12  0  0  0  0  0  0  0  0999 V2000
-                   0.4280    0.9580   -0.0542 C   0  0  0  0  0  0  0  0  0  0  0  0
-                   0.9494   -0.4476    0.0775 C   0  0  0  0  0  0  0  0  0  0  0  0
-                  -0.4453   -0.9477   -0.1840 C   0  0  0  0  0  0  0  0  0  0  0  0
-                  -0.9600    0.4286    0.2195 C   0  0  0  0  0  0  0  0  0  0  0  0
-                   0.8336    1.6583    0.6806 H   0  0  0  0  0  0  0  0  0  0  0  0
-                   0.5192    1.3314   -1.1071 H   0  0  0  0  0  0  0  0  0  0  0  0
-                   1.6987   -0.6701   -0.7153 H   0  0  0  0  0  0  0  0  0  0  0  0
-                   1.3564   -0.7346    1.0500 H   0  0  0  0  0  0  0  0  0  0  0  0
-                  -0.7635   -1.7281    0.5135 H   0  0  0  0  0  0  0  0  0  0  0  0
-                  -0.5819   -1.1411   -1.2610 H   0  0  0  0  0  0  0  0  0  0  0  0
-                  -1.7380    0.7914   -0.4921 H   0  0  0  0  0  0  0  0  0  0  0  0
-                  -1.2964    0.5016    1.2727 H   0  0  0  0  0  0  0  0  0  0  0  0
-                 1  2  1  0
-                 2  3  2  0
-                 3  4  3  0
-                 4  1  4  0
-                 1  5  1  0
-                 1  6  1  0
-                 2  7  1  0
-                 2  8  1  0
-                 3  9  1  0
-                 3 10  1  0
-                 4 11  1  0
-                 4 12  1  0
-               M  END
-                ",
-            )
+            mol: Mol::from_str(molecule_data)
             .unwrap(),
         }
     }
@@ -180,16 +147,17 @@ impl Colco {
     }
 }
 
-impl Default for Colco {
-    fn default() -> Self {
+impl Colco {
+    fn new(molecule_data: &str) -> Self {
         Colco {
-            inner: Rc::new(RefCell::new(ColcoInner::default())),
+            inner: Rc::new(RefCell::new(ColcoInner::new(molecule_data))),
         }
     }
 }
 
-fn main() {
-    let movement: Colco = Colco::default();
+#[js_export]
+fn initialize(element_id: &str, mol: &str) {
+    let movement: Colco = Colco::new(mol);
 
     unsafe {
         let (_window, gl, _events_loop, render_loop, shader_version) = {
@@ -296,4 +264,8 @@ fn main() {
             }
         });
     }
+}
+
+fn main(){
+    console!(log, "Colco loaded. Consider contributing - https://github.com/ecumene/colco-rs")
 }
