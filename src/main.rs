@@ -1,17 +1,14 @@
 // TODO: Reduce bundle size from 890kb to ~300kb
 
 #![deny(clippy::all)]
-use glow::*;
-use glow::HasContext as Context;
 use glam::{Mat4, Quat, Vec3};
-use std::{cell::RefCell, rc::Rc};
-use webgl_stdweb::WebGL2RenderingContext;
+use glow::HasContext as Context;
+use glow::*;
 use std::str::FromStr;
+use std::{cell::RefCell, rc::Rc};
 use stdweb::{
+    console, js_export,
     traits::*,
-    console,
-    js,
-    js_export,
     unstable::TryInto,
     web::{
         document,
@@ -19,14 +16,15 @@ use stdweb::{
         html_element::*,
     },
 };
+use webgl_stdweb::WebGL2RenderingContext;
 
-pub mod constants;
 pub mod assets;
+pub mod constants;
 pub mod mol;
 
-use constants::{SPHERE_SIZE, INDICES};
-use mol::Mol;
 use assets::init_buffers_from_constants;
+use constants::{INDICES, SPHERE_SIZE};
+use mol::Mol;
 
 struct ColcoInner {
     is_mouse_down: bool,
@@ -39,8 +37,7 @@ impl ColcoInner {
         ColcoInner {
             is_mouse_down: false,
             rotation: Quat::from_xyzw(0.0, 1.0, 0.0, 0.0),
-            mol: Mol::from_str(molecule_data)
-            .unwrap(),
+            mol: Mol::from_str(molecule_data).unwrap(),
         }
     }
 }
@@ -63,67 +60,69 @@ impl Colco {
         view_uniform: &Option<<B as Context>::UniformLocation>,
         gl: &B,
     ) {
-            let inner = self.inner.borrow();
-            for atom in &inner.mol.atoms {
-                let transform_location = Some(transform_uniform.as_ref().unwrap().clone());
-                let color_location = Some(color_uniform.as_ref().unwrap().clone());
-                let view_location = Some(view_uniform.as_ref().unwrap().clone());
-                &gl.uniform_3_f32(
-                    color_location,
-                    atom.element.color.x(),
-                    atom.element.color.y(),
-                    atom.element.color.z(),
-                );
-                let view_vector = self.view_vector();
-                &gl.uniform_3_f32(
-                    view_location,
-                    view_vector.x(),
-                    view_vector.y(),
-                    view_vector.z(),
-                );
+        let inner = self.inner.borrow();
+        for atom in &inner.mol.atoms {
+            let transform_location = Some(transform_uniform.as_ref().unwrap().clone());
+            let color_location = Some(color_uniform.as_ref().unwrap().clone());
+            let view_location = Some(view_uniform.as_ref().unwrap().clone());
+            &gl.uniform_3_f32(
+                color_location,
+                atom.element.color.x(),
+                atom.element.color.y(),
+                atom.element.color.z(),
+            );
+            let view_vector = self.view_vector();
+            &gl.uniform_3_f32(
+                view_location,
+                view_vector.x(),
+                view_vector.y(),
+                view_vector.z(),
+            );
+            &gl.uniform_matrix_4_f32_slice(
+                transform_location,
+                false,
+                (inner.mol.bounding_projection
+                    * Mat4::from_quat(inner.rotation).transpose()
+                    * Mat4::from_translation(atom.position * 4.5)
+                    * Mat4::from_scale(
+                        Vec3::new(atom.element.scale, atom.element.scale, atom.element.scale) * 2.0,
+                    ))
+                .as_ref(),
+            );
+            &gl.draw_elements(glow::TRIANGLES, SPHERE_SIZE as i32, glow::UNSIGNED_INT, 0);
+        }
+        for bond in &inner.mol.bonds {
+            let transform_location = Some(transform_uniform.as_ref().unwrap().clone());
+            let color_location = Some(color_uniform.as_ref().unwrap().clone());
+            &gl.uniform_3_f32(color_location, 0.25, 0.25, 0.25);
+            for bond_num in 0..bond.bond_type {
                 &gl.uniform_matrix_4_f32_slice(
-                    transform_location,
+                    transform_location.clone(),
                     false,
                     (inner.mol.bounding_projection
                         * Mat4::from_quat(inner.rotation).transpose()
-                        * Mat4::from_translation(atom.position * 4.5)
-                        * Mat4::from_scale(
-                            Vec3::new(atom.element.scale, atom.element.scale, atom.element.scale)
-                                * 2.0,
+                        * Mat4::from_translation(bond.position * 4.5)
+                        * Mat4::from_quat(bond.rotation)
+                        * Mat4::from_translation(Vec3::new(
+                            0.75 * bond_num as f32 - (0.25 * bond.bond_type as f32),
+                            0.0,
+                            0.0,
                         ))
+                        * Mat4::from_scale(Vec3::new(
+                            0.5 / bond.bond_type as f32,
+                            bond.length * 2.25,
+                            0.5 / bond.bond_type as f32,
+                        )))
                     .as_ref(),
                 );
                 &gl.draw_elements(
                     glow::TRIANGLES,
-                    SPHERE_SIZE as i32,
+                    (INDICES.len() - SPHERE_SIZE) as i32,
                     glow::UNSIGNED_INT,
-                    0,
+                    (SPHERE_SIZE * std::mem::size_of::<u32>()) as i32,
                 );
             }
-            for bond in &inner.mol.bonds {
-                let transform_location = Some(transform_uniform.as_ref().unwrap().clone());
-                let color_location = Some(color_uniform.as_ref().unwrap().clone());
-                &gl.uniform_3_f32(color_location, 0.25, 0.25, 0.25);
-                for bond_num in 0..bond.bond_type {
-                    &gl.uniform_matrix_4_f32_slice(
-                        transform_location.clone(),
-                        false,
-                        (inner.mol.bounding_projection
-                            * Mat4::from_quat(inner.rotation).transpose()
-                            * Mat4::from_translation(bond.position  * 4.5)
-                            * Mat4::from_quat(bond.rotation)
-                            * Mat4::from_translation(Vec3::new(0.0, 0.0, 0.75 * bond_num as f32 - (0.25 * bond.bond_type as f32)))
-                            * Mat4::from_scale(Vec3::new(0.5 / bond.bond_type as f32, bond.length * 2.25, 0.5 / bond.bond_type as f32)))
-                        .as_ref(),
-                    );
-                    &gl.draw_elements(
-                        glow::TRIANGLES,
-                        (INDICES.len() - SPHERE_SIZE) as i32,
-                        glow::UNSIGNED_INT,
-                        (SPHERE_SIZE * std::mem::size_of::<u32>()) as i32,
-                    );
-                }
-            }
+        }
     }
 
     // TODO: Decouple, for desktop version
@@ -131,8 +130,8 @@ impl Colco {
         let mut inner = self.inner.borrow_mut();
         if inner.is_mouse_down {
             inner.rotation = inner.rotation
-                * Quat::from_rotation_x(-location.movement_y() as f32 * 0.005)
-                * Quat::from_rotation_y(-location.movement_x() as f32 * 0.005);
+                * Quat::from_rotation_x(-location.movement_y() as f32 * 0.025)
+                * Quat::from_rotation_y(-location.movement_x() as f32 * 0.025);
         }
     }
 
@@ -162,7 +161,7 @@ fn initialize(element_id: &str, mol: &str) {
     unsafe {
         let (_window, gl, _events_loop, render_loop, shader_version) = {
             let canvas: CanvasElement = document()
-                .get_element_by_id("colco-viewer")
+                .get_element_by_id(element_id)
                 .unwrap()
                 .try_into()
                 .unwrap();
@@ -194,7 +193,9 @@ fn initialize(element_id: &str, mol: &str) {
         let program = gl.create_program().expect("Cannot create program");
 
         let shader_sources = [
-            (glow::VERTEX_SHADER, r#"
+            (
+                glow::VERTEX_SHADER,
+                r#"
             layout(location = 0) in vec3 vert_in;
             layout(location = 1) in vec3 norm_in;
             out vec3 norm_out;
@@ -204,8 +205,11 @@ fn initialize(element_id: &str, mol: &str) {
                 eye = -normalize (vert_in);
                 norm_out = normalize(norm_in);
                 gl_Position = transform * vec4(vert_in, 1.0);
-            }"#),
-            (glow::FRAGMENT_SHADER, r#"precision mediump float;
+            }"#,
+            ),
+            (
+                glow::FRAGMENT_SHADER,
+                r#"precision mediump float;
             uniform vec3 u_color;
             uniform vec3 u_view;
             in vec3 norm_out;
@@ -213,7 +217,8 @@ fn initialize(element_id: &str, mol: &str) {
             out vec4 color;
             void main() {
                 color = vec4(u_color * vec3(dot(eye, normalize(reflect(u_view, norm_out)))), 1.0);
-            }"#),
+            }"#,
+            ),
         ];
 
         let mut shaders = Vec::with_capacity(shader_sources.len());
@@ -257,7 +262,12 @@ fn initialize(element_id: &str, mol: &str) {
 
         render_loop.run(move |running: &mut bool| {
             gl.clear(glow::COLOR_BUFFER_BIT);
-            movement_for_render_closure.render_mol(&transform_location, &color_location, &view_location, &gl);
+            movement_for_render_closure.render_mol(
+                &transform_location,
+                &color_location,
+                &view_location,
+                &gl,
+            );
             if !*running {
                 gl.delete_program(program);
                 gl.delete_vertex_array(vertex_array);
@@ -266,6 +276,9 @@ fn initialize(element_id: &str, mol: &str) {
     }
 }
 
-fn main(){
-    console!(log, "Colco loaded. Consider contributing - https://github.com/ecumene/colco-rs")
+fn main() {
+    console!(
+        log,
+        "Colco loaded. Consider contributing - https://github.com/ecumene/colco-rs"
+    )
 }

@@ -1,22 +1,22 @@
+use glam::{Mat4, Quat, Vec3};
 use regex::Regex;
 use std::str::FromStr;
-use glam::{Mat4, Quat, Vec3};
 
 pub struct Element {
-  pub color: Vec3,
-  pub scale: f32,
+    pub color: Vec3,
+    pub scale: f32,
 }
 
 pub struct Bond {
-  pub position: Vec3,
-  pub rotation: Quat,
-  pub bond_type: u8,
-  pub length: f32,
+    pub position: Vec3,
+    pub rotation: Quat,
+    pub bond_type: u8,
+    pub length: f32,
 }
 
 pub struct Atom {
-  pub position: Vec3,
-  pub element: Element,
+    pub position: Vec3,
+    pub element: Element,
 }
 
 pub struct Mol {
@@ -68,7 +68,6 @@ impl FromStr for Mol {
                     _x => None,
                 }
             })
-            .map(|m| m)
             .collect::<Vec<_>>();
 
         let bonds =
@@ -85,14 +84,19 @@ impl FromStr for Mol {
                             let second_atom_index: usize =
                                 second_atom.as_str().trim().parse().unwrap();
                             let position = atoms[first_atom_index - 1].position;
-                            let dest = atoms[second_atom_index - 1].position.clone() - position.clone();
+                            let dest = atoms[second_atom_index - 1].position.clone() - position;
                             let forward = (dest).normalize();
                             let dot = forward.dot(Vec3::unit_y());
-                            let angle = dot.acos();
-                            let axis = Vec3::unit_y().cross(forward).normalize();
+                            let rotation = if (dot + 1.0).abs() < 0.000_001 {
+                                Quat::from_axis_angle(Vec3::unit_z(), std::f32::consts::PI)
+                            } else if (dot - 1.0).abs() < 0.000_001 {
+                                Quat::identity()
+                            } else {
+                                Quat::from_axis_angle(Vec3::unit_y().cross(forward).normalize(), dot.acos())
+                            };
                             Some(Bond {
                                 position,
-                                rotation: Quat::from_axis_angle(axis, angle),
+                                rotation,
                                 bond_type: bond_type.as_str().trim().parse().unwrap(),
                                 length: dest.length()
                             })
@@ -100,7 +104,6 @@ impl FromStr for Mol {
                         _x => None,
                     }
                 })
-                .map(|m| m)
                 .collect::<Vec<_>>();
         let bounding_projection = Mat4::orthographic_rh_gl(
             -bounding_size * 4.5 * 2.0,
