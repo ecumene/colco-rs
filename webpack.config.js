@@ -19,6 +19,11 @@ module.exports = {
         exclude: /(node_modules)/,
         use: 'babel-loader',
       },
+      {
+        test: /\.wasm$/,
+        exclude: /(node_modules)/,
+        use: 'wasm-loader'
+      }
     ],
   },
   plugins: [

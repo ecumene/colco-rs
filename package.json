@@ -3,11 +3,11 @@
   "version": "1.0.1",
   "description": "A 3D webgl molecule viewer",
   "main": "dist/index.js",
-  "dependencies": {},
   "devDependencies": {
     "@babel/core": "^7.7.7",
     "babel-loader": "^8.0.6",
     "copy-webpack-plugin": "^5.1.1",
+    "webassembly-loader": "^1.1.0",
     "webpack": "^4.41.5",
     "webpack-cli": "^3.3.10"
   },
