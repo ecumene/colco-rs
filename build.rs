@@ -27,27 +27,29 @@ fn main() {
         // TODO: These could be one iterator via chain()
         let (models, _materials) = sphere.unwrap();
         for m in models.iter() {
-            let data = interleave(
+            let mut data = interleave(
                 &(&m.mesh.positions).into_iter().chunks(3),
                 &(&m.mesh.normals).into_iter().chunks(3),
             )
             .flatten()
+            .map(|m| *m)
             .collect::<Vec<_>>();
-            mesh.append(&mut data.clone());
+            mesh.append(&mut data);
             indices.append(&mut m.mesh.indices.clone());
             consts.add_value("SPHERE_SIZE", "usize", indices.len());
         }
 
         let (models, _materials) = cylinder.unwrap();
         for m in models.iter() {
-            let data = interleave(
+            let mut data = interleave(
                 &(&m.mesh.positions).into_iter().chunks(3),
                 &(&m.mesh.normals).into_iter().chunks(3),
             )
             .flatten()
+            .map(|m| *m)
             .collect::<Vec<_>>();
             let current_index = indices.iter().max().unwrap() + 1;
-            mesh.append(&mut data.clone());
+            mesh.append(&mut data);
             indices.append(
                 &mut m
                     .mesh
@@ -58,8 +60,13 @@ fn main() {
                     .collect::<Vec<_>>(),
             )
         }
+        
+        consts.add_value("MESHES_SIZE", "usize", indices.len());
 
-        consts.add_array("MESH", "f32", &mesh);
-        consts.add_array("INDICES", "u32", &indices);
+        let mesh_u8_slice: &[u8] = bytemuck::cast_slice(&mesh);
+        let indices_u8_slice: &[u8] = bytemuck::cast_slice(&indices);
+
+        consts.add_array("MESH", "u8", mesh_u8_slice);
+        consts.add_array("INDICES", "u8", indices_u8_slice);
     }
 }

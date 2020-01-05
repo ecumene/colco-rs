@@ -8,6 +8,8 @@ pub struct Element {
 }
 
 pub struct Bond {
+    pub from_color: Vec3,
+    pub to_color: Vec3,
     pub position: Vec3,
     pub rotation: Quat,
     pub bond_type: u8,
@@ -51,15 +53,23 @@ impl FromStr for Mol {
                             position,
                             element: match a.as_str().trim() {
                                 "C" => Element {
-                                    color: Vec3::new(0.15, 0.15, 0.15),
+                                    color: Vec3::new(0.106, 0.149, 0.169),
+                                    scale: 1.0,
+                                },
+                                "O" => Element {
+                                    color: Vec3::new(0.94, 0.33, 0.40),
+                                    scale: 1.0,
+                                },
+                                "N" => Element {
+                                    color: Vec3::new(0.56, 0.89, 0.60),
                                     scale: 1.0,
                                 },
                                 "H" => Element {
-                                    color: Vec3::new(1.0, 1.0, 1.0),
+                                    color: Vec3::new(0.88, 0.88, 0.93),
                                     scale: 0.8,
                                 },
                                 _ => Element {
-                                    color: Vec3::new(1.0, 1.0, 1.0),
+                                    color: Vec3::new(0.969, 0.949, 0.824),
                                     scale: 1.0,
                                 },
                             },
@@ -79,12 +89,14 @@ impl FromStr for Mol {
                     let groups = (cap.get(1), cap.get(2), cap.get(3), cap.get(4));
                     match groups {
                         (Some(first_atom), Some(second_atom), Some(bond_type), Some(_useless_zeroes_mol_gives_me)) => {
-                            let first_atom_index: usize =
-                                first_atom.as_str().trim().parse().unwrap();
-                            let second_atom_index: usize =
-                                second_atom.as_str().trim().parse().unwrap();
-                            let position = atoms[first_atom_index - 1].position;
-                            let dest = atoms[second_atom_index - 1].position.clone() - position;
+                            let first_atom: &Atom = &atoms[
+                                first_atom.as_str().trim().parse::<usize>().unwrap() - 1
+                            ];
+                            let second_atom: &Atom = &atoms[
+                                second_atom.as_str().trim().parse::<usize>().unwrap() - 1
+                            ];
+                            let position = first_atom.position;
+                            let dest = second_atom.position.clone() - position;
                             let forward = (dest).normalize();
                             let dot = forward.dot(Vec3::unit_y());
                             let rotation = if (dot + 1.0).abs() < 0.000_001 {
@@ -95,6 +107,8 @@ impl FromStr for Mol {
                                 Quat::from_axis_angle(Vec3::unit_y().cross(forward).normalize(), dot.acos())
                             };
                             Some(Bond {
+                                from_color: first_atom.element.color,
+                                to_color: second_atom.element.color,
                                 position,
                                 rotation,
                                 bond_type: bond_type.as_str().trim().parse().unwrap(),

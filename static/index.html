@@ -3,7 +3,7 @@
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
   </head>
   <body>
-    <canvas id="colco-viewer" width="800px" height="800px"></canvas>
+    <canvas id="colco-viewer" width="500px" height="500px"></canvas>
     <script src="./colco.js"></script>
     <script>Rust.colco.then((colco)=>colco.initialize('colco-viewer', `
 
@@ -42,6 +42,6 @@
   8 15  1  0
 M  END
 
-`))</script>
+`, { atom_size: 2.0, bond_size: 0.5 }))</script>
   </body>
 </html>

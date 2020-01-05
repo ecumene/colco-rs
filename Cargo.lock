@@ -257,6 +257,7 @@ dependencies = [
  "itertools",
  "regex",
  "sdl2",
+ "serde 1.0.104",
  "stdweb",
  "tobj",
  "wasm-bindgen",

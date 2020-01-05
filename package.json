@@ -1,0 +1,38 @@
+{
+  "name": "colco",
+  "version": "1.0.0",
+  "description": "A 3D webgl molecule viewer",
+  "main": "dist/index.js",
+  "dependencies": {},
+  "devDependencies": {
+    "@babel/core": "^7.7.7",
+    "babel-loader": "^8.0.6",
+    "copy-webpack-plugin": "^5.1.1",
+    "webpack": "^4.41.5",
+    "webpack-cli": "^3.3.10"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "compile": "cargo web deploy --release --no-default-features --features std_web --target wasm32-unknown-unknown",
+    "optimize": "wasm-opt -Os -o ./target/deploy/colco.wasm ./target/deploy/colco.wasm",
+    "build": "webpack --mode production"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ecumene/colco-rs.git"
+  },
+  "keywords": [
+    "rust",
+    "wasm",
+    "molecule",
+    "chemistry",
+    "viewer",
+    "3d"
+  ],
+  "author": "ecumene",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ecumene/colco-rs/issues"
+  },
+  "homepage": "https://github.com/ecumene/colco-rs#readme"
+}

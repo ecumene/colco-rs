@@ -18,7 +18,7 @@ pub fn init_buffers_from_constants<G: glow::HasContext>(
         );
         gl.buffer_data_u8_slice(
             glow::ELEMENT_ARRAY_BUFFER,
-            bytemuck::cast_slice(&INDICES),
+            &INDICES,
             glow::STATIC_DRAW,
         );
 
@@ -31,7 +31,7 @@ pub fn init_buffers_from_constants<G: glow::HasContext>(
         );
         gl.buffer_data_u8_slice(
             glow::ARRAY_BUFFER,
-            bytemuck::cast_slice(&MESH),
+            &MESH,
             glow::STATIC_DRAW,
         );
 

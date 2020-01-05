@@ -1,0 +1,5 @@
+npm_modules/
+target/
+
+src/constants.rs
+
