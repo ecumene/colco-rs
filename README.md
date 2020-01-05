@@ -1,4 +1,6 @@
-# Colco (colcothar) - 3D molecule viewer via glow-rs
+# A wasm, webgl 3D molecule viewer 
+
+*Note: Colcothar is a chemical name for rust!*
 
 Colcothar is filling a small gap for 3d molecule viewers. For those who value new technologies and (somewhat, working on it) fast load times, colco was built for you!
 
@@ -8,7 +10,7 @@ Colco is a single wasm binary that draws a 3d movable molecule in your browser v
 
 Currently, only .mol file output from [rdkit](https://www.rdkit.org/) is supported. You also need to embed and include hydrogen in the output.
 
-###RDkit .mol files
+### RDkit .mol files
 
 Simply run these two functions before running `Chem.MolToMolBlock`:
 
