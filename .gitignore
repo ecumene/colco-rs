@@ -1,5 +1,6 @@
-npm_modules/
+node_modules/
 target/
+dist/
 
 src/constants.rs
 
