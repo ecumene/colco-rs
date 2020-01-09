@@ -50,9 +50,7 @@ colco.then((colco) => colco.initialize(
 ));
 
 document.getElementById('render-style').addEventListener('change', (event) => {
-  colco.then((colco) => colco.initialize(
-    'colco-viewer', // Your canvas ID
-    molecule, // Output from rdkit
+  colco.then((colco) => colco.render_with(
     renderStyles[event.target.value] // Rendering settings
   ));
 })

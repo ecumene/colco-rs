@@ -255,6 +255,7 @@ dependencies = [
  "glow",
  "glutin",
  "itertools",
+ "lazy_static 1.4.0",
  "regex",
  "sdl2",
  "serde 1.0.104",

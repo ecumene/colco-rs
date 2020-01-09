@@ -7,7 +7,6 @@ This is a minimalistic example of colco bundling and running in a `webpack-dev-s
 Simply run these couple of commands:
 
 ```shell
-cd example
 npm i
 mkdir assets && cp ./node_modules/colco/dist/colco.wasm assets/
 npm run start

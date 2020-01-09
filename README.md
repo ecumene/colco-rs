@@ -19,12 +19,16 @@ Simply run these two functions before running `Chem.MolToMolBlock`:
 
 ## Use in Javascript
 
+Ensure `colco.wasm` is served from `/`.
+
 Initialize colco like this:
 
 ```
+import colco from 'colco';
+
 let rdkitMolOutput = "";
 
-Rust.colco.then((colco)=>colco.initialize(
+colco.then((colco) => colco.initialize(
   'colco-viewer', // Your canvas ID
   rdkitMolOutput, // Output from rdkit
   { atom_size: 2.0, bond_size: 0.5 } // Rendering settings

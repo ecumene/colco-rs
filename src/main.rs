@@ -7,6 +7,7 @@ use glow::*;
 use std::str::FromStr;
 use std::{cell::RefCell, rc::Rc};
 use serde::Deserialize;
+use std::sync::Mutex;
 use stdweb::{
     console, js_export,
     js_deserializable,
@@ -19,6 +20,7 @@ use stdweb::{
     },
 };
 use webgl_stdweb::WebGL2RenderingContext;
+use lazy_static::lazy_static;
 
 pub mod assets;
 pub mod constants;
@@ -195,17 +197,33 @@ impl Colco {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct RenderSettings {
     atom_size: f32,
     bond_size: f32,
 }
 
+lazy_static! {
+    static ref RENDER_SETTINGS: Mutex<RenderSettings> =
+        Mutex::new(RenderSettings {
+            atom_size: 2.0,
+            bond_size: 0.5,
+        });
+}
+
 js_deserializable!( RenderSettings );
 
+// TODO: Get render_settings via js for spreading new settings into old ones
+
 #[js_export]
-fn initialize(element_id: &str, mol: &str, render_settings: RenderSettings) {
-    let movement: Colco = Colco::new(mol);
+fn render_with(render_settings: RenderSettings) {
+    let mut settings = RENDER_SETTINGS.lock().unwrap();
+    *settings = render_settings;
+}
+
+#[js_export]
+fn initialize(element_id: &str, mol: &str) {
+    let colco_state: Colco = Colco::new(mol);
 
     unsafe {
         let (_window, gl, _events_loop, render_loop, shader_version) = {
@@ -215,17 +233,17 @@ fn initialize(element_id: &str, mol: &str, render_settings: RenderSettings) {
                 .try_into()
                 .unwrap();
             // TODO: Decouple for desktop version
-            let movement_for_mouse_move_event_closure = movement.clone();
+            let colco_state_for_mouse_move_event_closure = colco_state.clone();
             canvas.add_event_listener(move |event: MouseMoveEvent| {
-                movement_for_mouse_move_event_closure.on_mouse_move(event);
+                colco_state_for_mouse_move_event_closure.on_mouse_move(event);
             });
-            let movement_for_mouse_down_event_closure = movement.clone();
+            let colco_state_for_mouse_down_event_closure = colco_state.clone();
             canvas.add_event_listener(move |event: MouseDownEvent| {
-                movement_for_mouse_down_event_closure.on_mouse_down(event);
+                colco_state_for_mouse_down_event_closure.on_mouse_down(event);
             });
-            let movement_for_mouse_up_event_closure = movement.clone();
+            let colco_state_for_mouse_up_event_closure = colco_state.clone();
             canvas.add_event_listener(move |event: MouseUpEvent| {
-                movement_for_mouse_up_event_closure.on_mouse_up(event);
+                colco_state_for_mouse_up_event_closure.on_mouse_up(event);
             });
             document().body().unwrap().append_child(&canvas);
             // TODO: Desktop context
@@ -244,40 +262,38 @@ fn initialize(element_id: &str, mol: &str, render_settings: RenderSettings) {
         let shader_sources = [
             (
                 glow::VERTEX_SHADER,
-                r#"
-            layout(location = 0) in vec3 vert_in;
-            layout(location = 1) in vec3 norm_in;
-            out vec3 norm_out;
-            out vec3 vert_out;
-            uniform mat4 transform;
-            void main() {
-                vert_out = -normalize (vert_in);
-                norm_out = norm_in;
-                gl_Position = transform * vec4(vert_in, 1.0);
-            }"#,
+                r#"layout(location = 0) in vec3 vert_in;
+                layout(location = 1) in vec3 norm_in;
+                out vec3 norm_out;
+                out vec3 vert_out;
+                uniform mat4 transform;
+                void main() {
+                    vert_out = -normalize (vert_in);
+                    norm_out = norm_in;
+                    gl_Position = transform * vec4(vert_in, 1.0);
+                }"#,
             ),
             (
                 glow::FRAGMENT_SHADER,
                 r#"precision mediump float;
-            uniform vec3 u_color;
-            uniform bool u_light;
-            uniform vec3 u_view;
-            in vec3 norm_out;
-            in vec3 vert_out;
-            out vec4 color;
-            void main() {
-                if (u_light) {
-                    color = vec4(u_color * 0.1 * vec3(dot(vert_out, normalize(reflect(u_view, norm_out)))) + u_color * 0.9, 1.0);
-                } else {
-                    color = vec4(u_color, 1.0);
-                }
-            }"#,
+                uniform vec3 u_color;
+                uniform bool u_light;
+                uniform vec3 u_view;
+                in vec3 norm_out;
+                in vec3 vert_out;
+                out vec4 color;
+                void main() {
+                    if (u_light) {
+                        color = vec4(u_color * 0.1 * vec3(dot(vert_out, normalize(reflect(u_view, norm_out)))) + u_color * 0.9, 1.0);
+                    } else {
+                        color = vec4(u_color, 1.0);
+                    }
+                }"#,
             ),
         ];
 
         let mut shaders = Vec::with_capacity(shader_sources.len());
 
-        // TODO: Good error handling
         for (shader_type, shader_source) in shader_sources.iter() {
             let shader = gl
                 .create_shader(*shader_type)
@@ -285,7 +301,7 @@ fn initialize(element_id: &str, mol: &str, render_settings: RenderSettings) {
             gl.shader_source(shader, &format!("{}\n{}", shader_version, shader_source));
             gl.compile_shader(shader);
             if !gl.get_shader_compile_status(shader) {
-                panic!(gl.get_shader_info_log(shader));
+                console!(error, gl.get_shader_info_log(shader));
             }
             gl.attach_shader(program, shader);
             shaders.push(shader);
@@ -293,7 +309,7 @@ fn initialize(element_id: &str, mol: &str, render_settings: RenderSettings) {
 
         gl.link_program(program);
         if !gl.get_program_link_status(program) {
-            panic!(gl.get_program_info_log(program));
+            console!(error, gl.get_program_info_log(program));
         }
 
         for shader in shaders {
@@ -308,7 +324,7 @@ fn initialize(element_id: &str, mol: &str, render_settings: RenderSettings) {
         gl.cull_face(glow::BACK);
         gl.enable(glow::DEPTH_TEST);
 
-        let movement_for_render_closure = movement.clone();
+        let colco_state_for_render_closure = colco_state.clone();
         let vertex_array = init_buffers_from_constants(&gl);
         let transform_location = gl.get_uniform_location(program, "transform");
         let light_uniform = gl.get_uniform_location(program, "u_light");
@@ -317,8 +333,8 @@ fn initialize(element_id: &str, mol: &str, render_settings: RenderSettings) {
 
         render_loop.run(move |running: &mut bool| {
             gl.clear(glow::COLOR_BUFFER_BIT);
-            movement_for_render_closure.render_mol(
-                &render_settings,
+            colco_state_for_render_closure.render_mol(
+                &RENDER_SETTINGS.lock().unwrap(),
                 &transform_location,
                 &light_uniform,
                 &color_location,
