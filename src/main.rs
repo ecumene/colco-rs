@@ -4,13 +4,12 @@
 use glam::{Mat4, Quat, Vec3};
 use glow::HasContext as Context;
 use glow::*;
-use std::str::FromStr;
-use std::{cell::RefCell, rc::Rc};
+use lazy_static::lazy_static;
 use serde::Deserialize;
+use std::str::FromStr;
 use std::sync::Mutex;
 use stdweb::{
-    console, js_export,
-    js_deserializable,
+    console, js_deserializable, js_export,
     traits::*,
     unstable::TryInto,
     web::{
@@ -20,43 +19,32 @@ use stdweb::{
     },
 };
 use webgl_stdweb::WebGL2RenderingContext;
-use lazy_static::lazy_static;
 
 pub mod assets;
 pub mod constants;
 pub mod mol;
 
 use assets::init_buffers_from_constants;
-use constants::{SPHERE_SIZE, MESHES_SIZE};
+use constants::{MESHES_SIZE, SPHERE_SIZE};
 use mol::Mol;
 
-struct ColcoInner {
+struct Colco {
     is_mouse_down: bool,
     rotation: Quat,
     mol: Mol,
 }
 
-impl ColcoInner {
-    fn new(molecule_data: &str) -> Self {
-        ColcoInner {
+impl Colco {
+    fn new(mol: Mol) -> Self {
+        Colco {
             is_mouse_down: false,
             rotation: Quat::from_xyzw(0.0, 1.0, 0.0, 0.0),
-            mol: Mol::from_str(molecule_data).unwrap(),
+            mol,
         }
     }
 }
 
-#[derive(Clone)]
-struct Colco {
-    inner: Rc<RefCell<ColcoInner>>,
-}
-
 impl Colco {
-    pub fn view_vector(&self) -> Vec3 {
-        let inner = self.inner.borrow();
-        inner.rotation * Vec3::unit_z()
-    }
-
     pub unsafe fn render_mol<B: Context>(
         &self,
         settings: &RenderSettings,
@@ -66,8 +54,7 @@ impl Colco {
         view_uniform: &Option<<B as Context>::UniformLocation>,
         gl: &B,
     ) {
-        let inner = self.inner.borrow();
-        let view_vector = self.view_vector();
+        let view_vector = self.rotation * Vec3::unit_z();
         let view_location = Some(view_uniform.as_ref().unwrap().clone());
         &gl.uniform_3_f32(
             view_location,
@@ -76,11 +63,8 @@ impl Colco {
             view_vector.z(),
         );
         let light_location_true = Some(light_uniform.as_ref().unwrap().clone());
-        &gl.uniform_1_i32(
-            light_location_true,
-            glow::TRUE as i32,
-        );
-        for atom in &inner.mol.atoms {
+        &gl.uniform_1_i32(light_location_true, glow::TRUE as i32);
+        for atom in &self.mol.atoms {
             let transform_location = Some(transform_uniform.as_ref().unwrap().clone());
             let color_location = Some(color_uniform.as_ref().unwrap().clone());
             &gl.uniform_3_f32(
@@ -92,31 +76,34 @@ impl Colco {
             &gl.uniform_matrix_4_f32_slice(
                 transform_location,
                 false,
-                (inner.mol.bounding_projection
-                    * Mat4::from_quat(inner.rotation).transpose()
+                (self.mol.bounding_projection
+                    * Mat4::from_quat(self.rotation).transpose()
                     * Mat4::from_translation(atom.position * 4.5)
                     * Mat4::from_scale(
-                        Vec3::new(atom.element.scale, atom.element.scale, atom.element.scale) * settings.atom_size,
+                        Vec3::new(atom.element.scale, atom.element.scale, atom.element.scale)
+                            * settings.atom_size,
                     ))
                 .as_ref(),
             );
             &gl.draw_elements(glow::TRIANGLES, SPHERE_SIZE as i32, glow::UNSIGNED_INT, 0);
         }
         let light_location_false = Some(light_uniform.as_ref().unwrap().clone());
-        &gl.uniform_1_i32(
-            light_location_false,
-            glow::FALSE as i32,
-        );
-        for bond in &inner.mol.bonds {
+        &gl.uniform_1_i32(light_location_false, glow::FALSE as i32);
+        for bond in &self.mol.bonds {
             let transform_location = Some(transform_uniform.as_ref().unwrap().clone());
             for bond_num in 0..bond.bond_type {
                 let color_location = Some(color_uniform.as_ref().unwrap().clone());
-                &gl.uniform_3_f32(color_location, bond.from_color.x(), bond.from_color.y(), bond.from_color.z());
+                &gl.uniform_3_f32(
+                    color_location,
+                    bond.from_color.x(),
+                    bond.from_color.y(),
+                    bond.from_color.z(),
+                );
                 &gl.uniform_matrix_4_f32_slice(
                     transform_location.clone(),
                     false,
-                    (inner.mol.bounding_projection
-                        * Mat4::from_quat(inner.rotation).transpose()
+                    (self.mol.bounding_projection
+                        * Mat4::from_quat(self.rotation).transpose()
                         * Mat4::from_translation(bond.position * 4.5)
                         * Mat4::from_quat(bond.rotation)
                         * Mat4::from_translation(Vec3::new(
@@ -138,12 +125,17 @@ impl Colco {
                     (SPHERE_SIZE * std::mem::size_of::<u32>()) as i32,
                 );
                 let color_location = Some(color_uniform.as_ref().unwrap().clone());
-                &gl.uniform_3_f32(color_location, bond.to_color.x(), bond.to_color.y(), bond.to_color.z());
+                &gl.uniform_3_f32(
+                    color_location,
+                    bond.to_color.x(),
+                    bond.to_color.y(),
+                    bond.to_color.z(),
+                );
                 &gl.uniform_matrix_4_f32_slice(
                     transform_location.clone(),
                     false,
-                    (inner.mol.bounding_projection
-                        * Mat4::from_quat(inner.rotation).transpose()
+                    (self.mol.bounding_projection
+                        * Mat4::from_quat(self.rotation).transpose()
                         * Mat4::from_translation(bond.position * 4.5)
                         * Mat4::from_quat(bond.rotation)
                         * Mat4::from_translation(Vec3::new(
@@ -153,7 +145,7 @@ impl Colco {
                         ))
                         * Mat4::from_scale(Vec3::new(
                             settings.bond_size / bond.bond_type as f32,
-                            bond.length * 1.15, 
+                            bond.length * 1.15,
                             settings.bond_size / bond.bond_type as f32,
                         )))
                     .as_ref(),
@@ -169,31 +161,20 @@ impl Colco {
     }
 
     // TODO: Decouple, for desktop version
-    pub fn on_mouse_move<MouseMoveEvent: IMouseEvent>(&self, location: MouseMoveEvent) {
-        let mut inner = self.inner.borrow_mut();
-        if inner.is_mouse_down {
-            inner.rotation = inner.rotation
+    pub fn on_mouse_move<MouseMoveEvent: IMouseEvent>(&mut self, location: MouseMoveEvent) {
+        if self.is_mouse_down {
+            self.rotation = self.rotation
                 * Quat::from_rotation_x(-location.movement_y() as f32 * 0.025)
                 * Quat::from_rotation_y(-location.movement_x() as f32 * 0.025);
         }
     }
 
-    pub fn on_mouse_down<MouseDownEvent: IMouseEvent>(&self, _location: MouseDownEvent) {
-        let mut inner = self.inner.borrow_mut();
-        inner.is_mouse_down = true;
+    pub fn on_mouse_down<MouseDownEvent: IMouseEvent>(&mut self, _location: MouseDownEvent) {
+        self.is_mouse_down = true;
     }
 
-    pub fn on_mouse_up<MouseUpEvent: IMouseEvent>(&self, _location: MouseUpEvent) {
-        let mut inner = self.inner.borrow_mut();
-        inner.is_mouse_down = false;
-    }
-}
-
-impl Colco {
-    fn new(molecule_data: &str) -> Self {
-        Colco {
-            inner: Rc::new(RefCell::new(ColcoInner::new(molecule_data))),
-        }
+    pub fn on_mouse_up<MouseUpEvent: IMouseEvent>(&mut self, _location: MouseUpEvent) {
+        self.is_mouse_down = false;
     }
 }
 
@@ -204,27 +185,32 @@ struct RenderSettings {
 }
 
 lazy_static! {
-    static ref RENDER_SETTINGS: Mutex<RenderSettings> =
-        Mutex::new(RenderSettings {
-            atom_size: 2.0,
-            bond_size: 0.5,
-        });
+    static ref colco: Mutex<Option<Colco>> = Mutex::new(None);
+    static ref render_settings: Mutex<Option<RenderSettings>> = Mutex::new(Some(RenderSettings {
+        atom_size: 2.0,
+        bond_size: 0.5,
+    }));
 }
 
-js_deserializable!( RenderSettings );
+js_deserializable!(RenderSettings);
 
 // TODO: Get render_settings via js for spreading new settings into old ones
 
 #[js_export]
-fn render_with(render_settings: RenderSettings) {
-    let mut settings = RENDER_SETTINGS.lock().unwrap();
-    *settings = render_settings;
+fn setRenderSettings(render: RenderSettings) {
+    let mut settings = render_settings.lock().unwrap();
+    *settings = Some(render);
 }
 
 #[js_export]
-fn initialize(element_id: &str, mol: &str) {
-    let colco_state: Colco = Colco::new(mol);
+fn setMolecule(molecule_data: &str) {
+    let mut state = colco.lock().unwrap();
+    *state = Some(Colco::new(Mol::from_str(molecule_data).unwrap()));
+}
 
+#[js_export]
+fn render(element_id: &str) {
+    // Todo: wrap unsafe around native fns only
     unsafe {
         let (_window, gl, _events_loop, render_loop, shader_version) = {
             let canvas: CanvasElement = document()
@@ -233,17 +219,14 @@ fn initialize(element_id: &str, mol: &str) {
                 .try_into()
                 .unwrap();
             // TODO: Decouple for desktop version
-            let colco_state_for_mouse_move_event_closure = colco_state.clone();
             canvas.add_event_listener(move |event: MouseMoveEvent| {
-                colco_state_for_mouse_move_event_closure.on_mouse_move(event);
+                colco.lock().unwrap().as_mut().unwrap().on_mouse_move(event);
             });
-            let colco_state_for_mouse_down_event_closure = colco_state.clone();
             canvas.add_event_listener(move |event: MouseDownEvent| {
-                colco_state_for_mouse_down_event_closure.on_mouse_down(event);
+                colco.lock().unwrap().as_mut().unwrap().on_mouse_down(event);
             });
-            let colco_state_for_mouse_up_event_closure = colco_state.clone();
             canvas.add_event_listener(move |event: MouseUpEvent| {
-                colco_state_for_mouse_up_event_closure.on_mouse_up(event);
+                colco.lock().unwrap().as_mut().unwrap().on_mouse_up(event);
             });
             document().body().unwrap().append_child(&canvas);
             // TODO: Desktop context
@@ -324,7 +307,6 @@ fn initialize(element_id: &str, mol: &str) {
         gl.cull_face(glow::BACK);
         gl.enable(glow::DEPTH_TEST);
 
-        let colco_state_for_render_closure = colco_state.clone();
         let vertex_array = init_buffers_from_constants(&gl);
         let transform_location = gl.get_uniform_location(program, "transform");
         let light_uniform = gl.get_uniform_location(program, "u_light");
@@ -333,8 +315,8 @@ fn initialize(element_id: &str, mol: &str) {
 
         render_loop.run(move |running: &mut bool| {
             gl.clear(glow::COLOR_BUFFER_BIT);
-            colco_state_for_render_closure.render_mol(
-                &RENDER_SETTINGS.lock().unwrap(),
+            colco.lock().unwrap().as_ref().unwrap().render_mol(
+                &render_settings.lock().unwrap().as_ref().unwrap(),
                 &transform_location,
                 &light_uniform,
                 &color_location,

@@ -42,8 +42,9 @@
           8 15  1  0
         M  END
       `;
-      colco.render_with({atom_size: 2.0, bond_size: 0.5});
-      colco.initialize('colco-viewer', molecule);
+      colco.setRenderSettings({atom_size: 2.0, bond_size: 0.5});
+      colco.setMolecule(molecule);
+      colco.render('colco-viewer');
 })</script>
   </body>
 </html>

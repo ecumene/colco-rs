@@ -16,11 +16,7 @@ pub fn init_buffers_from_constants<G: glow::HasContext>(
             INDICES.len() as i32 * std::mem::size_of::<u32>() as i32,
             glow::STATIC_DRAW,
         );
-        gl.buffer_data_u8_slice(
-            glow::ELEMENT_ARRAY_BUFFER,
-            &INDICES,
-            glow::STATIC_DRAW,
-        );
+        gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, &INDICES, glow::STATIC_DRAW);
 
         let vbo = gl.create_buffer().unwrap();
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
@@ -29,11 +25,7 @@ pub fn init_buffers_from_constants<G: glow::HasContext>(
             MESH.len() as i32 * std::mem::size_of::<f32>() as i32,
             glow::STATIC_DRAW,
         );
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            &MESH,
-            glow::STATIC_DRAW,
-        );
+        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, &MESH, glow::STATIC_DRAW);
 
         gl.enable_vertex_attrib_array(0);
         gl.vertex_attrib_pointer_f32(
