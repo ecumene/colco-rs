@@ -1,38 +1,52 @@
 const path = require('path');
-const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
+  bail: true,
+  devtool: 'source-map',
   mode: 'production',
-  entry: './target/deploy/colco.js',
+  entry: './src',
   node: {
     fs: "empty"
   },
   output: {
-    path: path.resolve('dist'),
     filename: 'index.js',
-    libraryTarget: 'commonjs2',
+    chunkFilename: '[name].chunk.js',
+    publicPath: './'
   },
   module: {
     rules: [
       {
-        test: /\.js?$/,
-        exclude: /(node_modules)/,
-        use: 'babel-loader',
+        oneOf: [
+          {
+            test: /\.(js|jsx|mjs)$/,
+            loader: 'babel-loader',
+            options: {
+              compact: true,
+            },
+          },
+          {
+            test: /\.rs$/,
+            use: [
+              {
+                loader: 'babel-loader',
+                options: {
+                  compact: true,
+                }
+              },
+              {
+                loader: 'rust-native-wasm-loader',
+                options: {
+                  release: true,
+                  cargoWeb: true,
+                  name: '[name].wasm'
+                }
+              }
+            ]
+          },
+        ],
       },
-      {
-        test: /\.wasm$/,
-        exclude: /(node_modules)/,
-        use: 'wasm-loader'
-      }
-    ],
+    ], 
   },
-  plugins: [
-    new CopyPlugin([
-      { 
-        from: './target/deploy/colco.wasm',
-      },
-    ]),
-  ],
   resolve: {
     extensions: ['.js'],
   },
