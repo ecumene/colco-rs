@@ -1,6 +1,6 @@
 {
   "name": "colco",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A 3D webgl molecule viewer",
   "devDependencies": {
     "@babel/core": "^7.7.7",
