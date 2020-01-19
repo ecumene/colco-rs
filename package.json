@@ -15,6 +15,10 @@
     "optimize": "wasm-opt -Os -o ./dist/*.rs ./dist/*.rs",
     "build": "webpack --mode production"
   },
+  "files": [
+    "dist/*.js",
+    "dist/*.rs"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ecumene/colco-rs.git"
