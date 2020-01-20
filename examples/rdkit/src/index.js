@@ -44,20 +44,17 @@ const renderStyles = {
   'spheres': { atom_size: 7.5, bond_size: 0.0 },
 }
 
-colco.then((colco) => colco.initialize(
-  'colco-viewer', // Your canvas ID
-  molecule, // Output from rdkit
-  { atom_size: 2.0, bond_size: 0.5 } // Rendering settings
-));
+colco.then(colco => {
+  colco.setRenderSettings(renderStyles['default']);
+  colco.setMolecule(molecule);
+  colco.render('colco-viewer')
 
-document.getelementbyid('render-style').addeventlistener('change', (event) => {
-  colco.then((colco) => colco.render_with(
-    renderstyles[event.target.value] // rendering settings
-  ));
-})
+  document.getElementById('render-style').addEventListener('change', (event) => {
+    colco.setRenderSettings(renderStyles[event.target.value]);
+  });
 
-document.getelementbyid('smiles').addeventlistener('submit', (event) => {
-  colco.then((colco) => colco.render_with(
-    renderstyles[event.target.value] // rendering settings
-  ));
-})
+  //document.getelementbyid('smiles').addeventlistener('submit', (event) => {
+  //  renderstyles[event.target.value] // rendering settings
+  //});
+});
+

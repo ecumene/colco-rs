@@ -107,7 +107,7 @@ impl Colco {
                         * Mat4::from_translation(bond.position * 4.5)
                         * Mat4::from_quat(bond.rotation)
                         * Mat4::from_translation(Vec3::new(
-                            bond_num as f32 - (0.25 * (bond.bond_type - 1) as f32),
+                            bond_num as f32 - (0.5 * (bond.bond_type - 1) as f32),
                             0.0,
                             0.0,
                         ))
@@ -139,7 +139,7 @@ impl Colco {
                         * Mat4::from_translation(bond.position * 4.5)
                         * Mat4::from_quat(bond.rotation)
                         * Mat4::from_translation(Vec3::new(
-                            bond_num as f32 - (0.25 * (bond.bond_type - 1) as f32),
+                            bond_num as f32 - (0.5 * (bond.bond_type - 1) as f32),
                             bond.length * 2.25,
                             0.0,
                         ))

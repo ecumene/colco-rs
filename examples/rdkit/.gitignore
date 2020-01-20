@@ -1,3 +1,4 @@
 node_modules/
 rdkit-service/
-assets/
+assets/colco.wasm
+
