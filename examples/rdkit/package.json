@@ -9,7 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "colco": "^1.0.6"
+    "colco": "^1.0.5"
   },
   "devDependencies": {
     "@babel/core": "^7.7.7",

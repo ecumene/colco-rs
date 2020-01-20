@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2018"
 build = "build.rs"
 
-[lib]
-crate-type = ["cdylib"]
-
 [profile.release]
 opt-level = 'z'
 lto = true

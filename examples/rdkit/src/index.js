@@ -39,6 +39,7 @@ M  END
 
 const renderStyles = {
   'default': { atom_size: 2.0, bond_size: 0.5 },
+  'stick': { atom_size: 1.0, bond_size: 1.0 },
   'wireframe': { atom_size: 0.5, bond_size: 0.1 },
   'spheres': { atom_size: 7.5, bond_size: 0.0 },
 }
@@ -49,8 +50,14 @@ colco.then((colco) => colco.initialize(
   { atom_size: 2.0, bond_size: 0.5 } // Rendering settings
 ));
 
-document.getElementById('render-style').addEventListener('change', (event) => {
+document.getelementbyid('render-style').addeventlistener('change', (event) => {
   colco.then((colco) => colco.render_with(
-    renderStyles[event.target.value] // Rendering settings
+    renderstyles[event.target.value] // rendering settings
+  ));
+})
+
+document.getelementbyid('smiles').addeventlistener('submit', (event) => {
+  colco.then((colco) => colco.render_with(
+    renderstyles[event.target.value] // rendering settings
   ));
 })
