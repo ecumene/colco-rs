@@ -4,6 +4,8 @@
 
 Colcothar is filling a small gap for 3d molecule viewers. For those who value new technologies and (somewhat, working on it) fast load times, colco was built for you!
 
+https://user-images.githubusercontent.com/6249465/119227779-2e7d2880-baea-11eb-9213-e3972dfad655.mp4
+
 Colco is a single wasm binary that draws a 3d movable molecule in your browser via [glow](https://crates.io/crates/glow), [stdweb](https://crates.io/crates/stdweb), and [glam](https://crates.io/crates/glam). It achieves (somewhat, working on it) fast loadtimes by integrating a build step that loads (via [tobj](https://crates.io/crates/tobj)) all 3d model data (rods and spheres) into u8 slices, perfect for webgl consumption.
 
 ## File Support
